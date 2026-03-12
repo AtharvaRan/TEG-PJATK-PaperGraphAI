@@ -154,7 +154,7 @@ Evaluate the system and present the results.
 
 ## Minimum Requirements
 
-* [ ] Process at least **10 research papers**
+* [ ] Process at least **30 research papers**
 * [ ] Extract **concepts and relationships**
 * [ ] Build a working **knowledge graph**
 * [ ] Implement **RAG question answering**
