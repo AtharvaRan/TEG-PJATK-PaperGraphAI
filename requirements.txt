@@ -20,15 +20,16 @@ tiktoken
 # ── Document parsing ──────────────────────────────────────────────────────────
 pypdf
 pdfminer.six
-unstructured[pdf]               # swap to unstructured-client for API version
+unstructured-client             # Unstructured.io hosted API
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
 networkx
 pyvis
 
-# ── App ───────────────────────────────────────────────────────────────────────
-streamlit
-pandas
+# ── API backend ───────────────────────────────────────────────────────────────
+fastapi
+uvicorn[standard]
+python-multipart                # for file upload endpoints
 
 # ── Utils ─────────────────────────────────────────────────────────────────────
 python-dotenv

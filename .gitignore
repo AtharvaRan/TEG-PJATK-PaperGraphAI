@@ -1,9 +1,14 @@
-# ── Project specific ──────────────────────────────────────────────────────────
-.env                        # API keys — never commit
-docs/                       # your PDFs — user brings their own
-db/                         # ChromaDB + knowledge graph — generated locally
-*.html                      # pyvis graph output
-lib/                        # pyvis auto-generated JS/CSS
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+.env.local
+*.pem
+*.key
+
+# ── Project data (user-generated) ─────────────────────────────────────────────
+docs/
+db/
+/*.html
+/graph.html
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -14,21 +19,35 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# ── Virtual environment ───────────────────────────────────────────────────────
+# ── Virtual environments ──────────────────────────────────────────────────────
 venv/
 .venv/
 env/
 
-# ── Mac ───────────────────────────────────────────────────────────────────────
+# ── Node / Frontend ───────────────────────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── OS ────────────────────────────────────────────────────────────────────────
 .DS_Store
 .AppleDouble
+Thumbs.db
 
-# ── IDEs ──────────────────────────────────────────────────────────────────────
+# ── Editors ───────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
-*.cursor*
+*.swp
+*.swo
+.cursor*
 
 # ── Misc ──────────────────────────────────────────────────────────────────────
 *.log
-.ruff_cache/
