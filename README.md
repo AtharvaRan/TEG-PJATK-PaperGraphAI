@@ -2,7 +2,7 @@
 
 > Chat with your research papers. Understand how ideas connect.
 
-PaperGraph AI is a **GraphRAG** research assistant. Drop in a folder of PDFs — the system embeds every chunk into a vector store **and** extracts a concept-level knowledge graph across all your papers. Ask questions that span your entire library; answers are grounded in both similarity search and graph traversal.
+PaperGraph AI is a **GraphRAG** research assistant. Drop in PDFs — the system embeds every chunk into a vector store **and** extracts a concept-level knowledge graph across all your papers. Ask questions that span your entire library; answers are grounded in both similarity search and graph traversal.
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.10+-blue?logo=python&logoColor=white" />
@@ -43,8 +43,8 @@ Both signals feed into a **4-agent LangGraph pipeline** that synthesizes the fin
                  ┌────────────────────┴────────────────────┐
                  ▼                                         ▼
          ChromaDB (vectors)                  NetworkX (knowledge graph)
-         chunks + embeddings                 LLMGraphTransformer
-                 │                                         │
+         chunks + embeddings                 GPT-4o-mini extraction
+                 │                            (on-demand, parallel)
                  └────────────────┬────────────────────────┘
                                   ▼
                      ┌────────────────────────┐
@@ -63,11 +63,13 @@ Both signals feed into a **4-agent LangGraph pipeline** that synthesizes the fin
 
 ## 🚀 Features
 
-- **💬 Chat** — streaming answers grounded in your papers
-- **📚 Library viewer** — inspect every parsed element (Title, Table, NarrativeText…)
-- **🕸 Knowledge graph** — force-directed visual of concept relationships across papers
-- **⚖ RAG vs GraphRAG** — side-by-side comparison on the same question
-- **📄 PDF inline viewer** — read the source paper next to the chat
+- **💬 Chat** — streaming answers grounded in your papers with source citations
+- **📄 Resizable PDF viewer** — read the source paper next to the chat, drag to resize
+- **🔍 Multi-paper scoping** — @mention specific papers to scope queries
+- **📚 Library manager** — inspect parsed elements, delete papers, search across files
+- **🕸 Knowledge graph** — interactive force-directed graph with on-demand Build/Stop/Rebuild
+- **📊 Insights dashboard** — live metrics: papers, chunks, questions asked, tokens used
+- **💾 Chat history** — last 10 conversations persisted in localStorage
 - **🛡 Strict guardrails** — refuses out-of-scope questions; answers only from your library
 
 ---
@@ -77,15 +79,14 @@ Both signals feed into a **4-agent LangGraph pipeline** that synthesizes the fin
 | Layer | Choice |
 |---|---|
 | **Backend** | FastAPI + Uvicorn |
-| **Frontend** | React 18 · TypeScript · Vite · TailwindCSS |
-| **Animation** | Framer Motion · Canvas 3D |
+| **Frontend** | React 18 · TypeScript · Vite · TailwindCSS · Framer Motion |
 | **Agents** | LangGraph (4-stage pipeline) |
-| **LLM** | OpenAI GPT-4o + GPT-4o-mini |
+| **LLM** | OpenAI GPT-4o (chat) + GPT-4o-mini (graph extraction) |
 | **Embeddings** | OpenAI `text-embedding-3-small` |
 | **Vector store** | ChromaDB |
-| **Graph extraction** | LangChain `LLMGraphTransformer` |
+| **Graph extraction** | LangChain `LLMGraphTransformer` (5x parallel) |
 | **Graph store** | NetworkX |
-| **Graph viz** | PyVis |
+| **Graph viz** | `react-force-graph-2d` (Canvas-based) |
 | **PDF parsing** | Unstructured.io (API) → PyPDF fallback |
 
 ---
@@ -162,14 +163,16 @@ TEG-PJATK-PaperGraphAI/
 ├── start.sh                  # Spins up backend + frontend
 ├── requirements.txt          # Python dependencies
 ├── .env.example              # Template for API keys
+├── HANDOFF.md                # Full project context for continuing development
 │
 ├── frontend/                 # React + Vite + TypeScript client
 │   ├── src/
-│   │   ├── pages/            # Landing, Chat, Library, Graph, Compare
-│   │   ├── components/       # Sidebar, AppBackground, etc.
+│   │   ├── pages/            # Landing, Chat, Library, Graph, Insights
+│   │   ├── components/       # Sidebar, AppBackground, CosmicParallaxBg
 │   │   ├── hooks/            # use3D (mouse parallax, tilt)
 │   │   ├── api.ts            # Typed fetch wrappers
-│   │   └── App.tsx           # Router + shell
+│   │   ├── theme.ts          # Design tokens
+│   │   └── App.tsx           # Router + lifted state
 │   ├── package.json
 │   └── vite.config.ts
 │
@@ -187,13 +190,17 @@ All served from `http://localhost:8000`.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/status` | Chunk / node / edge / file counts |
+| `GET` | `/api/usage` | Questions asked, tokens, timestamps |
 | `GET` | `/api/library` | Parsed elements per file |
-| `POST` | `/api/upload` | Multipart PDF upload → ingest + graph build |
-| `POST` | `/api/chat` | Streaming SSE chat (RAG + graph) |
-| `POST` | `/api/compare` | RAG-only vs GraphRAG on the same query |
+| `DELETE` | `/api/library/{filename}` | Remove paper + chunks + graph refs |
+| `POST` | `/api/upload` | SSE streaming — parse + embed (graph built separately) |
+| `POST` | `/api/chat` | SSE streaming chat with optional paper scoping |
+| `POST` | `/api/build-graph` | Kick off background graph extraction |
+| `POST` | `/api/build-graph/cancel` | Stop graph build after current batch |
+| `GET` | `/api/graph-build-status` | Progress, pending chunks, node/edge counts |
 | `GET` | `/api/graph` | Raw `{nodes, edges}` JSON |
-| `GET` | `/api/graph-html` | Rendered PyVis HTML (iframed in client) |
 | `GET` | `/api/pdf/{filename}` | Serve a PDF for the inline viewer |
+| `POST` | `/api/deduplicate` | Remove duplicate chunks from ChromaDB |
 
 Full interactive docs at **http://localhost:8000/docs**
 
@@ -201,7 +208,7 @@ Full interactive docs at **http://localhost:8000/docs**
 
 ## 🔄 Rebuilding the database
 
-The database is built incrementally as you upload. To start fresh:
+The vector database is built incrementally as you upload. The knowledge graph is built on-demand from the Graph page. To start fresh:
 
 ```bash
 rm -rf db/
