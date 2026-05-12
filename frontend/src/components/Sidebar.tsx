@@ -1,56 +1,79 @@
 import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  MessageSquare, BookOpen, Network, BarChart2,
+  MessageSquare, BookOpen, Network, Activity,
   Upload, ChevronLeft, ChevronRight,
   CheckCircle2, AlertCircle, Loader2, X, Home,
+  Plus, Trash2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import type { Page } from '../App'
-import type { Status } from '../api'
-import { uploadFiles, buildGraph } from '../api'
+import type { Page, SavedChat } from '../App'
+import type { Status, UploadProgress } from '../api'
+import { streamUpload } from '../api'
 
 interface Props {
   page: Page
   setPage: (p: Page) => void
   status: Status
   onUploadDone: () => void
+  chatHistory: SavedChat[]
+  onLoadChat: (chat: SavedChat) => void
+  onDeleteChat: (id: string) => void
+  onNewChat: () => void
 }
 
 const NAV: { key: Page; icon: typeof MessageSquare; label: string; color: string }[] = [
   { key: 'chat',    icon: MessageSquare, label: 'Chat',            color: '#818cf8' },
   { key: 'library', icon: BookOpen,      label: 'Library',         color: '#a78bfa' },
   { key: 'graph',   icon: Network,       label: 'Knowledge Graph', color: '#c084fc' },
-  { key: 'compare', icon: BarChart2,     label: 'Compare',         color: '#f59e0b' },
+  { key: 'insights', icon: Activity,      label: 'Insights',        color: '#f59e0b' },
 ]
 
 type UploadState = 'idle' | 'uploading' | 'building' | 'done' | 'error'
 
-export default function Sidebar({ page, setPage, status, onUploadDone }: Props) {
+export default function Sidebar({ page, setPage, status, onUploadDone, chatHistory, onLoadChat, onDeleteChat, onNewChat }: Props) {
   const [collapsed,   setCollapsed]   = useState(false)
   const [uploadState, setUploadState] = useState<UploadState>('idle')
   const [uploadMsg,   setUploadMsg]   = useState('')
+  const [uploadPct,   setUploadPct]   = useState(0)
+  const [uploadStage, setUploadStage] = useState('')
+  const [elapsed,     setElapsed]     = useState(0)
   const [dragging,    setDragging]    = useState(false)
-  const fileRef  = useRef<HTMLInputElement>(null)
-  const navigate = useNavigate()
+  const fileRef    = useRef<HTMLInputElement>(null)
+  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null)
+  const navigate   = useNavigate()
 
   async function handleFiles(files: File[]) {
     if (!files.length) return
     setUploadState('uploading')
-    setUploadMsg(`Parsing ${files.length} file(s)…`)
-    try {
-      const result = await uploadFiles(files)
-      setUploadMsg(`${result.chunks} chunks via ${result.parser}`)
-      setUploadState('building')
-      await buildGraph()
-      setUploadState('done')
-      setUploadMsg(`${result.chunks} chunks indexed`)
-      onUploadDone()
-      setTimeout(() => setUploadState('idle'), 4000)
-    } catch (e: any) {
-      setUploadState('error')
-      setUploadMsg(e.message ?? 'Upload failed')
-    }
+    setUploadMsg(`Uploading ${files.length} file(s)…`)
+    setUploadPct(5)
+    setUploadStage('uploading')
+    setElapsed(0)
+    timerRef.current = setInterval(() => setElapsed(t => t + 1), 1000)
+
+    await streamUpload(
+      files,
+      (p: UploadProgress) => {
+        setUploadPct(p.pct)
+        setUploadStage(p.stage)
+        setUploadMsg(p.detail)
+      },
+      (result) => {
+        if (timerRef.current) clearInterval(timerRef.current)
+        setUploadPct(100)
+        setUploadStage('done')
+        setUploadState('done')
+        setUploadMsg(`${result.chunks} chunks indexed`)
+        onUploadDone()
+        setTimeout(() => { setUploadState('idle'); setUploadPct(0) }, 4000)
+      },
+      (err) => {
+        if (timerRef.current) clearInterval(timerRef.current)
+        setUploadState('error')
+        setUploadMsg(err)
+      },
+    )
   }
 
   function onDrop(e: React.DragEvent) {
@@ -169,6 +192,61 @@ export default function Sidebar({ page, setPage, status, onUploadDone }: Props) 
           )
         })}
 
+        {/* Chat History */}
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <div className="flex items-center justify-between px-2 pt-5 pb-2">
+                <p className="text-sm font-semibold text-zinc-400">
+                  Recent Chats
+                </p>
+                <motion.button
+                  onClick={onNewChat}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  title="New chat"
+                  className="p-1 rounded-lg transition-colors hover:bg-white/5"
+                  style={{ color: 'rgba(255,255,255,0.3)' }}
+                >
+                  <Plus size={14} />
+                </motion.button>
+              </div>
+
+              {chatHistory.length === 0 ? (
+                <p className="px-2 py-3 text-xs" style={{ color: 'rgba(255,255,255,0.2)' }}>
+                  No chats yet
+                </p>
+              ) : (
+                <div className="space-y-0.5">
+                  {chatHistory.map(chat => (
+                    <div
+                      key={chat.id}
+                      onClick={() => onLoadChat(chat)}
+                      className="group flex items-center gap-2.5 px-2.5 py-2 rounded-xl cursor-pointer transition-colors hover:bg-white/5"
+                    >
+                      <MessageSquare size={13} className="flex-shrink-0" style={{ color: 'rgba(255,255,255,0.2)' }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs truncate" style={{ color: 'rgba(255,255,255,0.5)' }}>{chat.title}</p>
+                      </div>
+                      <button
+                        onClick={e => { e.stopPropagation(); onDeleteChat(chat.id) }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-white/10 flex-shrink-0"
+                        style={{ color: 'rgba(255,255,255,0.25)' }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Status */}
         <AnimatePresence>
           {!collapsed && (
@@ -222,9 +300,26 @@ export default function Sidebar({ page, setPage, status, onUploadDone }: Props) 
                 onChange={e => handleFiles(Array.from(e.target.files ?? []))}
               />
               {busy ? (
-                <div className="flex items-center justify-center gap-2 text-indigo-400">
-                  <Loader2 size={13} className="animate-spin" />
-                  <span className="text-xs font-medium truncate">{uploadMsg}</span>
+                <div className="space-y-2.5 px-1">
+                  <div className="flex items-center gap-2 text-indigo-400">
+                    <Loader2 size={12} className="animate-spin flex-shrink-0" />
+                    <span className="text-[11px] font-medium truncate">{uploadMsg}</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{ background: 'linear-gradient(90deg, #4f46e5, #7c3aed)' }}
+                      initial={{ width: '0%' }}
+                      animate={{ width: `${uploadPct}%` }}
+                      transition={{ duration: 0.6, ease: 'easeOut' }}
+                    />
+                  </div>
+                  {/* Stage + timer */}
+                  <div className="flex items-center justify-between text-[10px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                    <span className="capitalize">{uploadStage === 'graph' ? 'Building graph' : uploadStage}</span>
+                    <span>{Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, '0')}</span>
+                  </div>
                 </div>
               ) : (
                 <>

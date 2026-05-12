@@ -71,7 +71,7 @@ export default function AppBackground() {
           const d  = Math.sqrt(dx*dx + dy*dy)
           if (d < 140) {
             ctx.beginPath()
-            ctx.strokeStyle = `rgba(99,102,241,${(1 - d/140) * 0.07})`
+            ctx.strokeStyle = `rgba(20,184,166,${(1 - d/140) * 0.07})`
             ctx.lineWidth = 0.5
             ctx.moveTo(nodes[i].x, nodes[i].y)
             ctx.lineTo(nodes[j].x, nodes[j].y)

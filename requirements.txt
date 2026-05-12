@@ -23,8 +23,9 @@ pdfminer.six
 unstructured-client             # Unstructured.io hosted API
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
+# Viewer is now react-force-graph in the frontend (see frontend/package.json),
+# so we no longer need pyvis on the backend.
 networkx
-pyvis
 
 # ── API backend ───────────────────────────────────────────────────────────────
 fastapi

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence, useInView } from 'framer-motion'
-import { FileText, RefreshCw, Layers, Tag, Cpu, ChevronDown, Zap } from 'lucide-react'
-import { fetchLibrary, type LibraryFile } from '../api'
+import { FileText, RefreshCw, Layers, Tag, Cpu, ChevronDown, Zap, Trash2, Download, Search } from 'lucide-react'
+import { fetchLibrary, deletePaper, type LibraryFile } from '../api'
 
 interface Props { onRefresh: () => void }
 
@@ -50,6 +50,24 @@ export default function LibraryPage({ onRefresh }: Props) {
 
   useEffect(() => { load() }, [])
 
+  const [search,   setSearch]   = useState('')
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  async function handleDelete(filename: string) {
+    if (!confirm(`Delete "${filename}" and all its chunks?`)) return
+    setDeleting(filename)
+    try {
+      await deletePaper(filename)
+      await load()
+      onRefresh()
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  const filtered        = files.filter(f => !search || f.name.toLowerCase().includes(search.toLowerCase()))
   const totalChunks     = files.reduce((a, f) => a + f.chunks, 0)
   const allCats         = Array.from(new Set(files.flatMap(f => Object.keys(f.categories))))
   const useUnstructured = files.some(f => f.parser === 'unstructured')
@@ -85,6 +103,26 @@ export default function LibraryPage({ onRefresh }: Props) {
           Refresh
         </motion.button>
       </div>
+
+      {/* Search */}
+      {files.length > 1 && (
+        <div className="px-6 pt-3 flex-shrink-0">
+          <div className="relative">
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.2)' }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search papers…"
+              className="w-full pl-8 pr-3 py-2 text-xs rounded-xl outline-none transition-all"
+              style={{
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                color: 'rgba(255,255,255,0.7)',
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Unstructured callout */}
       <AnimatePresence>
@@ -144,8 +182,9 @@ export default function LibraryPage({ onRefresh }: Props) {
           </div>
         )}
         <div className="space-y-3">
-          {!loading && files.map((file, i) => (
-            <FileCard3D key={file.name} file={file} index={i} catColors={CAT_COLORS} catText={CAT_TEXT} catBar={CAT_BAR} />
+          {!loading && filtered.map((file, i) => (
+            <FileCard3D key={file.name} file={file} index={i} catColors={CAT_COLORS} catText={CAT_TEXT} catBar={CAT_BAR}
+              onDelete={() => handleDelete(file.name)} deleting={deleting === file.name} />
           ))}
         </div>
       </div>
@@ -175,13 +214,15 @@ export default function LibraryPage({ onRefresh }: Props) {
 
 /* ── 3D scroll-reveal file card ── */
 function FileCard3D({
-  file, index, catColors, catText, catBar,
+  file, index, catColors, catText, catBar, onDelete, deleting,
 }: {
   file: LibraryFile
   index: number
   catColors: Record<string, string>
   catText: Record<string, string>
   catBar: Record<string, string>
+  onDelete: () => void
+  deleting: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref    = useRef<HTMLDivElement>(null)
@@ -235,9 +276,34 @@ function FileCard3D({
               </span>
             </div>
           </div>
-          <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronDown size={13} style={{ color: 'rgba(255,255,255,0.3)' }} />
-          </motion.div>
+          <div className="flex items-center gap-1">
+            <motion.a
+              href={`/api/pdf/${encodeURIComponent(file.name)}`}
+              target="_blank"
+              whileHover={{ scale: 1.08, backgroundColor: 'rgba(255,255,255,0.08)' }}
+              whileTap={{ scale: 0.92 }}
+              onClick={e => e.stopPropagation()}
+              title="View PDF"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors"
+              style={{ color: 'rgba(165,180,252,0.8)', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)' }}
+            >
+              <Download size={13} /> View
+            </motion.a>
+            <motion.button
+              onClick={e => { e.stopPropagation(); onDelete() }}
+              whileHover={{ scale: 1.08, backgroundColor: 'rgba(239,68,68,0.12)' }}
+              whileTap={{ scale: 0.92 }}
+              disabled={deleting}
+              title="Delete paper and all its chunks"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-30"
+              style={{ color: 'rgba(248,113,113,0.8)', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)' }}
+            >
+              {deleting ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />} Delete
+            </motion.button>
+            <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} className="ml-1">
+              <ChevronDown size={14} style={{ color: 'rgba(255,255,255,0.3)' }} />
+            </motion.div>
+          </div>
         </div>
 
         {/* Expanded breakdown */}

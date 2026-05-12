@@ -333,7 +333,7 @@ function AppMockup3D({ lerped }: { lerped: { x: number; y: number } }) {
                 { icon: '💬', label: 'Chat', active: true },
                 { icon: '📚', label: 'Library', active: false },
                 { icon: '🕸', label: 'Knowledge Graph', active: false },
-                { icon: '⚖', label: 'Compare', active: false },
+                { icon: '📊', label: 'Insights', active: false },
               ].map(item => (
                 <div key={item.label}
                   className="flex items-center gap-2 px-3 py-1.5 text-xs mx-1 mt-0.5 rounded-lg"
@@ -347,14 +347,26 @@ function AppMockup3D({ lerped }: { lerped: { x: number; y: number } }) {
                   <span className="truncate">{item.label}</span>
                 </div>
               ))}
+              {/* Chat history */}
+              <div className="mt-3 px-3">
+                <p className="text-[9px] font-semibold text-zinc-500 mb-1.5">Recent Chats</p>
+                {['What is RAG?', 'BERT architecture'].map(t => (
+                  <div key={t} className="flex items-center gap-1.5 py-1 text-[10px] truncate" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                    <span style={{ fontSize: 8 }}>💬</span>
+                    <span className="truncate">{t}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Fake chat */}
             <div className="flex-1 flex flex-col" style={{ background: 'rgba(6,6,8,0.8)' }}>
               {/* Chat header */}
               <div className="flex items-center gap-2 px-4 py-2.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                  style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}>AI</div>
+                <div className="w-5 h-5 rounded-lg flex items-center justify-center text-[9px] text-white"
+                  style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 0 8px rgba(99,102,241,0.4)' }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+                </div>
                 <span className="text-xs font-semibold text-white">Research Chat</span>
                 <span className="text-[10px] ml-1" style={{ color: 'rgba(255,255,255,0.3)' }}>· 3 papers indexed</span>
               </div>
@@ -369,8 +381,10 @@ function AppMockup3D({ lerped }: { lerped: { x: number; y: number } }) {
                 </div>
                 {/* AI response */}
                 <div className="flex gap-2">
-                  <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[8px] font-bold text-white mt-0.5"
-                    style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)' }}>AI</div>
+                  <div className="w-5 h-5 rounded-lg flex-shrink-0 flex items-center justify-center text-white mt-0.5"
+                    style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 0 8px rgba(99,102,241,0.3)' }}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+                  </div>
                   <div className="text-[11px] px-3 py-2 rounded-xl rounded-tl-sm max-w-[80%]"
                     style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.7)' }}>
                     BERT is directly based on the Transformer encoder architecture. While the original Transformer uses both encoder and decoder stacks…
@@ -480,7 +494,7 @@ function Navbar({ scrollY, onOpenApp }: { scrollY: number; onOpenApp: () => void
         <span className="font-semibold text-sm text-white tracking-tight">PaperGraph AI</span>
       </div>
       <div className="flex items-center gap-3">
-        <a href="https://github.com" target="_blank" rel="noopener noreferrer"
+        <a href="https://github.com/AtharvaRan/TEG-PJATK-PaperGraphAI" target="_blank" rel="noopener noreferrer"
           className="flex items-center gap-1 text-sm text-zinc-400 hover:text-white transition-colors">
           GitHub <ExternalLink size={12} className="opacity-60" />
         </a>
@@ -596,7 +610,7 @@ function Hero({ lerped, scrollY, onOpenApp }: {
             <ArrowRight size={16} /> Open App
           </motion.button>
           <motion.a
-            href="https://github.com" target="_blank" whileHover={{ scale: 1.02 }}
+            href="https://github.com/AtharvaRan/TEG-PJATK-PaperGraphAI" target="_blank" whileHover={{ scale: 1.02 }}
             className="flex items-center gap-2 px-6 py-3 border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-medium rounded-xl transition-all text-sm"
           >
             View on GitHub <ExternalLink size={14} className="opacity-60" />
@@ -673,7 +687,7 @@ function ProblemSection() {
 const STEPS = [
   { icon: UploadCloud, num: '01', title: 'Upload',  desc: 'Drop PDFs, Word docs, or images. Unstructured.io detects layout — titles, tables, figures — not just raw text.' },
   { icon: Layers,      num: '02', title: 'Embed',   desc: 'Every chunk is embedded with OpenAI and stored in ChromaDB. Semantic search finds related ideas even without keyword overlap.' },
-  { icon: Share2,      num: '03', title: 'Graph',   desc: 'GPT-4o-mini extracts concept relationships: BERT → BASED_ON → Transformer. Stored as a directed knowledge graph.' },
+  { icon: Share2,      num: '03', title: 'Graph',   desc: 'GPT-4o-mini extracts concept triplets on demand: BERT → BASED_ON → Transformer. Stored as a directed knowledge graph.' },
   { icon: MessageSquare, num: '04', title: 'Ask',   desc: 'Four LangGraph agents: question rewriting, vector retrieval, graph lookup, GPT-4o synthesis. Answer streams in real time.' },
 ]
 
@@ -819,7 +833,7 @@ const FEATURES = [
   { icon: Network,     title: 'Knowledge Graph',    desc: 'Visual force-directed graph of concept relationships across your entire library.' },
   { icon: Sparkles,    title: '4 AI Agents',        desc: 'LangGraph chain: question rewriting → vector retrieval → graph lookup → GPT-4o synthesis.' },
   { icon: Zap,         title: 'Streaming Answers',  desc: 'Responses appear word-by-word as GPT generates them. No waiting for the full answer.' },
-  { icon: BarChart2,   title: 'RAG vs GraphRAG',    desc: 'Side-by-side comparison of vector-only vs graph-augmented retrieval on any question.' },
+  { icon: BarChart2,   title: 'Live Insights',       desc: 'Built-in dashboard tracks papers, chunks, tokens used, and graph health in real time.' },
   { icon: Shield,      title: 'Strict Guardrails',  desc: 'Answers grounded in your papers only. Explicitly refuses out-of-scope questions.' },
 ]
 
@@ -851,6 +865,180 @@ function FeaturesSection() {
           </Reveal3D>
         ))}
       </SpotlightCard>
+    </section>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   INSIGHTS DASHBOARD SECTION
+───────────────────────────────────────────────────────────────────────────── */
+
+function AnimatedCounter({ to, suffix = '' }: { to: number; suffix?: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const inView = useInView(ref, { once: true, margin: '-60px' })
+  const [val, setVal] = useState(0)
+
+  useEffect(() => {
+    if (!inView) return
+    const start = performance.now()
+    const dur = 1600
+    const frame = (now: number) => {
+      const t = Math.min((now - start) / dur, 1)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setVal(Math.round(eased * to))
+      if (t < 1) requestAnimationFrame(frame)
+    }
+    requestAnimationFrame(frame)
+  }, [inView, to])
+
+  return <span ref={ref}>{val.toLocaleString()}{suffix}</span>
+}
+
+const DEMO_METRICS = [
+  { label: 'Papers Indexed',   value: 12,     suffix: '',   color: 'rgba(99,102,241,0.15)',  border: 'rgba(99,102,241,0.25)', text: '#a5b4fc', icon: '📄' },
+  { label: 'Chunks Created',   value: 4320,   suffix: '',   color: 'rgba(79,70,229,0.1)',    border: 'rgba(99,102,241,0.2)',  text: '#818cf8', icon: '🧩' },
+  { label: 'Questions Asked',  value: 89,     suffix: '',   color: 'rgba(124,58,237,0.1)',   border: 'rgba(124,58,237,0.2)', text: '#c4b5fd', icon: '💬' },
+  { label: 'Tokens Used',      value: 142,    suffix: 'K',  color: 'rgba(99,102,241,0.08)',  border: 'rgba(99,102,241,0.15)', text: '#a5b4fc', icon: '⚡' },
+]
+
+const DEMO_PAPERS = [
+  { name: 'attention_is_all_you_need.pdf', chunks: 412 },
+  { name: 'bert_pretraining.pdf',          chunks: 387 },
+  { name: 'gpt4_technical_report.pdf',     chunks: 341 },
+  { name: 'rag_survey_2024.pdf',           chunks: 298 },
+  { name: 'knowledge_graphs_llm.pdf',      chunks: 264 },
+]
+
+function InsightsDashboardSection() {
+  return (
+    <section className="relative z-10 max-w-5xl mx-auto px-6 pb-28">
+      <Reveal3D>
+        <p className="text-center text-xs font-semibold tracking-widest uppercase text-zinc-500 mb-4">Live insights</p>
+        <h2 className="text-center text-3xl font-bold text-white mb-4">
+          Know exactly what's in your library
+        </h2>
+        <p className="text-center text-sm text-zinc-500 mb-14 max-w-xl mx-auto">
+          A built-in research dashboard tracks every paper, chunk, graph node, and token — so you always know the state of your corpus.
+        </p>
+      </Reveal3D>
+
+      {/* Metric cards row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {DEMO_METRICS.map((m, i) => (
+          <Reveal3D key={m.label} delay={i * 0.08}>
+            <div
+              className="rounded-xl p-4 flex flex-col gap-2"
+              style={{ background: m.color, border: `1px solid ${m.border}` }}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>{m.label}</span>
+                <span style={{ fontSize: 14 }}>{m.icon}</span>
+              </div>
+              <p className="text-2xl font-bold" style={{ color: m.text }}>
+                <AnimatedCounter to={m.value} suffix={m.suffix} />
+              </p>
+            </div>
+          </Reveal3D>
+        ))}
+      </div>
+
+      {/* Bottom row: top papers + graph health */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+        {/* Top papers */}
+        <div className="md:col-span-3">
+        <Reveal3D delay={0.1}>
+          <div
+            className="rounded-xl p-4 h-full"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <FileText size={13} className="text-indigo-400" />
+              <span className="text-xs font-semibold text-white">Top Papers by Chunks</span>
+            </div>
+            <div className="space-y-1.5">
+              {DEMO_PAPERS.map((p, i) => (
+                <div
+                  key={p.name}
+                  className="flex items-center justify-between rounded-lg px-3 py-2 text-xs"
+                  style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}
+                >
+                  <span className="truncate" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                    {i + 1}. {p.name}
+                  </span>
+                  <span className="ml-3 flex-shrink-0 text-indigo-400 font-medium">
+                    <AnimatedCounter to={p.chunks} /> chunks
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Reveal3D>
+        </div>
+
+        {/* Graph health */}
+        <div className="md:col-span-2">
+        <Reveal3D delay={0.18}>
+          <div
+            className="rounded-xl p-4 h-full"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Network size={13} className="text-indigo-400" />
+              <span className="text-xs font-semibold text-white">Graph Health</span>
+            </div>
+            <div className="space-y-2.5">
+              {[
+                { label: 'Nodes', value: 847 },
+                { label: 'Edges', value: 2341 },
+                { label: 'Avg degree', value: 5, suffix: '.5' },
+              ].map(row => (
+                <div key={row.label} className="flex items-center justify-between text-xs">
+                  <span style={{ color: 'rgba(255,255,255,0.45)' }}>{row.label}</span>
+                  <span className="font-semibold text-white">
+                    {row.suffix
+                      ? <><AnimatedCounter to={row.value} />{row.suffix}</>
+                      : <AnimatedCounter to={row.value} />
+                    }
+                  </span>
+                </div>
+              ))}
+              <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>Connectivity</span>
+                  <span className="text-xs font-medium text-indigo-400 ml-auto">High</span>
+                </div>
+                <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: 'linear-gradient(90deg,#4f46e5,#7c3aed)' }}
+                    initial={{ width: 0 }}
+                    whileInView={{ width: '82%' }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1.4, ease: 'easeOut', delay: 0.3 }}
+                  />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>Coverage</span>
+                  <span className="text-xs font-medium text-indigo-400 ml-auto">100%</span>
+                </div>
+                <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: 'linear-gradient(90deg,#7c3aed,#4f46e5)' }}
+                    initial={{ width: 0 }}
+                    whileInView={{ width: '100%' }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1.6, ease: 'easeOut', delay: 0.4 }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </Reveal3D>
+        </div>
+      </div>
     </section>
   )
 }
@@ -933,7 +1121,7 @@ function Footer() {
     <footer className="relative z-10 py-6 text-center" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
       <p className="text-xs text-zinc-600">
         PaperGraph AI &nbsp;·&nbsp; Built with LangChain + Unstructured.io &nbsp;·&nbsp;
-        <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">GitHub</a>
+        <a href="https://github.com/AtharvaRan/TEG-PJATK-PaperGraphAI" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-400 transition-colors">GitHub</a>
         &nbsp;·&nbsp; MIT License
       </p>
     </footer>
@@ -963,6 +1151,7 @@ export default function LandingPage() {
       <PipelineSection />
       <UnstructuredSection />
       <FeaturesSection />
+      <InsightsDashboardSection />
       <TechSection />
       <CtaSection onOpenApp={openApp} />
       <Footer />

@@ -1,11 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { FileText, ChevronDown, ChevronUp, RotateCcw, PanelLeftClose, PanelLeftOpen, Sparkles, ArrowUp } from 'lucide-react'
+import { FileText, ChevronDown, ChevronUp, RotateCcw, PanelLeftClose, PanelLeftOpen, Sparkles, ArrowUp, AtSign, X, Bot, GripVertical } from 'lucide-react'
 import { streamChat, type ChatMessage, type Status } from '../api'
 
-interface Props { status: Status; onRefresh: () => void }
+interface Props {
+  status: Status
+  onRefresh: () => void
+  messages: ChatMessage[]
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>
+  onSaveChat: (messages: ChatMessage[]) => void
+  onNewChat: () => void
+  chatTimestamp?: number | null
+}
 
 const SUGGESTIONS = [
   'Summarize the key contributions',
@@ -14,18 +22,48 @@ const SUGGESTIONS = [
   'What are the main limitations?',
 ]
 
-export default function ChatPage({ status }: Props) {
-  const [messages,  setMessages]  = useState<ChatMessage[]>([])
-  const [input,     setInput]     = useState('')
-  const [streaming, setStreaming] = useState(false)
-  const [pdfList,   setPdfList]   = useState<string[]>([])
-  const [selPdf,    setSelPdf]    = useState('')
-  const [pdfOpen,   setPdfOpen]   = useState(true)
-  const [focused,   setFocused]   = useState(false)
+export default function ChatPage({ status, messages, setMessages, onSaveChat, onNewChat, chatTimestamp }: Props) {
+  const [input,         setInput]         = useState('')
+  const [streaming,     setStreaming]     = useState(false)
+  const [pdfList,       setPdfList]       = useState<string[]>([])
+  const [selPdf,        setSelPdf]        = useState('')
+  const [pdfOpen,       setPdfOpen]       = useState(true)
+  const [pdfWidth,      setPdfWidth]      = useState(46)   // percentage
+  const [draggingResize, setDraggingResize] = useState(false)
+  const [focused,       setFocused]       = useState(false)
+  const [mentionPapers, setMentionPapers] = useState<string[]>([])
+  const [pickerOpen,    setPickerOpen]    = useState(false)
 
   const bottomRef    = useRef<HTMLDivElement>(null)
   const inputRef     = useRef<HTMLTextAreaElement>(null)
   const scrollRef    = useRef<HTMLDivElement>(null)
+  const pickerRef    = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // ── Resize drag handler ──
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setDraggingResize(true)
+    const startX = e.clientX
+    const startWidth = pdfWidth
+    const container = containerRef.current
+    if (!container) return
+
+    const onMove = (ev: MouseEvent) => {
+      const containerRect = container.getBoundingClientRect()
+      const dx = ev.clientX - startX
+      const pctDelta = (dx / containerRect.width) * 100
+      const next = Math.min(75, Math.max(15, startWidth + pctDelta))
+      setPdfWidth(next)
+    }
+    const onUp = () => {
+      setDraggingResize(false)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }, [pdfWidth])
 
   useEffect(() => {
     fetch('/api/library').then(r => r.json()).then(data => {
@@ -35,14 +73,43 @@ export default function ChatPage({ status }: Props) {
     }).catch(() => {})
   }, [])
 
+  const isNearBottom = useRef(true)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (isNearBottom.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
   }, [messages])
+
+  function handleScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    const threshold = 120
+    isNearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+  }
+
+  // Auto-save chat when assistant finishes responding
+  useEffect(() => {
+    const finished = messages.filter(m => m.role === 'assistant' && !m.streaming && m.content)
+    if (finished.length === 0 || messages.some(m => m.streaming)) return
+    onSaveChat(messages)
+  }, [messages, onSaveChat])
+
+  useEffect(() => {
+    if (!pickerOpen) return
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setPickerOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [pickerOpen])
 
   async function send(text: string) {
     if (!text.trim() || streaming) return
     const question = text.trim()
     setInput('')
+    setPickerOpen(false)
     inputRef.current && (inputRef.current.style.height = 'auto')
 
     const userMsg:      ChatMessage = { role: 'user',      content: question }
@@ -50,42 +117,67 @@ export default function ChatPage({ status }: Props) {
     setMessages(prev => [...prev, userMsg, assistantMsg])
     setStreaming(true)
 
+    if (mentionPapers.length > 0) {
+      const first = mentionPapers[0]
+      if (pdfList.includes(first)) {
+        setSelPdf(first)
+      }
+    }
+
+    const scopeArg = mentionPapers.length === 1 ? mentionPapers[0] : mentionPapers.length > 1 ? mentionPapers : null
+
     await streamChat(question, messages,
       token => setMessages(prev => {
-        const u = [...prev]; const l = u[u.length-1]
-        if (l.role === 'assistant') l.content += token
+        const u = [...prev]
+        const last = u[u.length - 1]
+        if (last.role === 'assistant') {
+          u[u.length - 1] = { ...last, content: last.content + token }
+        }
         return u
       }),
-      (sources, graph) => setMessages(prev => {
-        const u = [...prev]; const l = u[u.length-1]
-        if (l.role === 'assistant') { l.streaming = false; l.sources = sources; l.graph = graph }
+      (sources, graph) => {
+        setMessages(prev => {
+          const u = [...prev]
+          const last = u[u.length - 1]
+          if (last.role === 'assistant') {
+            u[u.length - 1] = { ...last, streaming: false, sources, graph }
+          }
+          setStreaming(false); return u
+        })
+        if (mentionPapers.length === 0 && sources.length === 1 && pdfList.includes(sources[0])) {
+          setSelPdf(sources[0])
+        }
+      },
+      err => setMessages(prev => {
+        const u = [...prev]
+        const last = u[u.length - 1]
+        if (last.role === 'assistant') {
+          u[u.length - 1] = { ...last, content: `Error: ${err}`, streaming: false }
+        }
         setStreaming(false); return u
       }),
-      err => setMessages(prev => {
-        const u = [...prev]; const l = u[u.length-1]
-        if (l.role === 'assistant') { l.content = `Error: ${err}`; l.streaming = false }
-        setStreaming(false); return u
-      })
+      scopeArg,
     )
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') { setPickerOpen(false); return }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input) }
   }
 
   const hasContent = status.chunks > 0
 
   return (
-    <div className="flex h-full overflow-hidden rounded-2xl">
+    <div ref={containerRef} className="flex h-full overflow-hidden rounded-2xl" style={{ userSelect: draggingResize ? 'none' : undefined }}>
 
       {/* ── PDF Panel ── */}
       <AnimatePresence initial={false}>
         {pdfOpen && (
           <motion.div
             initial={{ width: 0, opacity: 0 }}
-            animate={{ width: '46%', opacity: 1 }}
+            animate={{ width: `${pdfWidth}%`, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 280, damping: 30 }}
+            transition={draggingResize ? { duration: 0 } : { type: 'spring', stiffness: 280, damping: 30 }}
             className="flex flex-col flex-shrink-0 overflow-hidden"
             style={{ borderRight: '1px solid rgba(255,255,255,0.05)' }}
           >
@@ -118,19 +210,35 @@ export default function ChatPage({ status }: Props) {
         )}
       </AnimatePresence>
 
-      {/* PDF toggle strip */}
-      <button
-        onClick={() => setPdfOpen(o => !o)}
-        className="w-4 flex-shrink-0 flex items-center justify-center transition-colors"
+      {/* Resize handle / PDF toggle strip */}
+      <div
+        onMouseDown={pdfOpen ? onResizeStart : undefined}
+        onClick={!pdfOpen ? () => setPdfOpen(true) : undefined}
+        className={`flex-shrink-0 flex items-center justify-center transition-colors ${pdfOpen ? 'cursor-col-resize hover:bg-indigo-500/10' : 'cursor-pointer'}`}
         style={{
-          background: 'rgba(255,255,255,0.015)',
+          width: pdfOpen ? 8 : 16,
+          background: draggingResize ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.015)',
           borderRight: '1px solid rgba(255,255,255,0.04)',
           color: 'rgba(255,255,255,0.2)',
         }}
-        title={pdfOpen ? 'Hide PDF' : 'Show PDF'}
+        title={pdfOpen ? 'Drag to resize' : 'Show PDF'}
       >
-        {pdfOpen ? <PanelLeftClose size={11} /> : <PanelLeftOpen size={11} />}
-      </button>
+        {pdfOpen ? (
+          <div
+            className="flex flex-col items-center gap-0.5 transition-opacity"
+            style={{ opacity: draggingResize ? 1 : 0.4 }}
+          >
+            <GripVertical size={10} />
+          </div>
+        ) : (
+          <PanelLeftOpen size={11} />
+        )}
+      </div>
+
+      {/* Overlay to capture mouse during resize */}
+      {draggingResize && (
+        <div className="fixed inset-0 z-[9999]" style={{ cursor: 'col-resize' }} />
+      )}
 
       {/* ── Chat Panel ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -146,9 +254,9 @@ export default function ChatPage({ status }: Props) {
         >
           <div className="flex items-center gap-2.5">
             <div className="relative">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white"
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
                 style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', boxShadow: '0 0 12px rgba(99,102,241,0.4)' }}
-              >AI</div>
+              ><Bot size={14} className="text-white" /></div>
               {streaming && (
                 <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#060608] animate-pulse" />
               )}
@@ -160,35 +268,53 @@ export default function ChatPage({ status }: Props) {
               </p>
             </div>
           </div>
-          {messages.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            {/* PDF toggle */}
             <motion.button
-              onClick={() => setMessages([])}
+              onClick={() => setPdfOpen(o => !o)}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
+              title={pdfOpen ? 'Hide PDF' : 'Show PDF'}
               className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-colors"
-              style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}
+              style={{ color: pdfOpen ? '#a5b4fc' : 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)', background: pdfOpen ? 'rgba(99,102,241,0.08)' : 'transparent' }}
             >
-              <RotateCcw size={11} /> Clear
+              {pdfOpen ? <PanelLeftClose size={11} /> : <PanelLeftOpen size={11} />}
+              <span className="hidden sm:inline">{pdfOpen ? 'Hide PDF' : 'PDF'}</span>
             </motion.button>
-          )}
+            {/* New chat */}
+            {messages.length > 0 && (
+              <motion.button
+                onClick={onNewChat}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-colors"
+                style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                <RotateCcw size={11} /> New
+              </motion.button>
+            )}
+          </div>
         </div>
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+        <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
           {!hasContent && messages.length === 0 && <EmptyState />}
           {hasContent  && messages.length === 0 && <SuggestionChips onSelect={send} />}
 
           <AnimatePresence initial={false}>
-            {messages.map((msg, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 14, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.24, ease: [0.25, 0.46, 0.45, 0.94] }}
-              >
-                <MessageBubble msg={msg} />
-              </motion.div>
-            ))}
+            {messages.map((msg, i) => {
+              const isFirstUser = msg.role === 'user' && messages.findIndex(m => m.role === 'user') === i
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 14, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.24, ease: [0.25, 0.46, 0.45, 0.94] }}
+                >
+                  <MessageBubble msg={msg} timestamp={isFirstUser ? chatTimestamp : undefined} />
+                </motion.div>
+              )
+            })}
           </AnimatePresence>
           <div ref={bottomRef} />
         </div>
@@ -202,8 +328,8 @@ export default function ChatPage({ status }: Props) {
                 : '0 0 0 1px rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.3)',
             }}
             transition={{ duration: 0.2 }}
-            className="relative rounded-2xl overflow-hidden"
-            style={{ background: 'rgba(255,255,255,0.04)' }}
+            className="relative rounded-2xl"
+            style={{ background: 'rgba(255,255,255,0.04)', overflow: 'visible' }}
           >
             {/* Animated gradient border on focus */}
             {focused && (
@@ -218,6 +344,80 @@ export default function ChatPage({ status }: Props) {
               />
             )}
 
+            {/* Scoped-paper chip */}
+            {mentionPapers.length > 0 && (
+              <div className="px-4 pt-2.5 pb-0 flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Scoped to:</span>
+                {mentionPapers.map(paper => (
+                  <span
+                    key={paper}
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
+                    style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#a5b4fc' }}
+                  >
+                    <FileText size={9} />
+                    {paper.replace('.pdf', '')}
+                    <button onClick={() => setMentionPapers(prev => prev.filter(p => p !== paper))} className="ml-0.5 hover:text-white transition-colors">
+                      <X size={9} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Paper picker dropdown (button-driven) */}
+            <AnimatePresence>
+              {pickerOpen && pdfList.length > 0 && (
+                <motion.div
+                  ref={pickerRef}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: 0.14 }}
+                  className="absolute bottom-full left-4 right-4 mb-2 rounded-xl overflow-hidden z-50 max-h-52 overflow-y-auto"
+                  style={{
+                    background: 'rgba(18,18,22,0.97)',
+                    border: '1px solid rgba(99,102,241,0.25)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                    backdropFilter: 'blur(12px)',
+                  }}
+                >
+                  <div className="flex items-center justify-between px-3 py-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <p className="text-[10px] font-semibold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                      Query one paper
+                    </p>
+                    <button onClick={() => setPickerOpen(false)} className="text-zinc-600 hover:text-zinc-400 transition-colors"><X size={11} /></button>
+                  </div>
+                  {/* All papers option */}
+                  <button
+                    onClick={() => { setMentionPapers([]); setPickerOpen(false); inputRef.current?.focus() }}
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 text-xs transition-colors hover:bg-indigo-500/10"
+                    style={{ color: mentionPapers.length === 0 ? '#a5b4fc' : 'rgba(255,255,255,0.5)', background: mentionPapers.length === 0 ? 'rgba(99,102,241,0.08)' : undefined }}
+                  >
+                    <Sparkles size={11} className="flex-shrink-0" />
+                    <span>All papers</span>
+                  </button>
+                  {pdfList.map(paper => {
+                    const selected = mentionPapers.includes(paper)
+                    return (
+                      <button
+                        key={paper}
+                        onClick={() => {
+                          setMentionPapers(prev => selected ? prev.filter(p => p !== paper) : [...prev, paper])
+                          inputRef.current?.focus()
+                        }}
+                        className="w-full text-left flex items-center gap-2 px-3 py-2 text-xs transition-colors hover:bg-indigo-500/10"
+                        style={{ color: selected ? '#a5b4fc' : 'rgba(255,255,255,0.7)', background: selected ? 'rgba(99,102,241,0.08)' : undefined }}
+                      >
+                        <FileText size={11} className={`flex-shrink-0 ${selected ? 'text-indigo-400' : 'text-zinc-600'}`} />
+                        <span className="truncate flex-1">{paper}</span>
+                        {selected && <span className="text-indigo-400 text-[10px]">✓</span>}
+                      </button>
+                    )
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="relative flex items-end gap-2 px-4 py-3">
               <textarea
                 ref={inputRef}
@@ -226,7 +426,7 @@ export default function ChatPage({ status }: Props) {
                 onKeyDown={onKeyDown}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
-                placeholder={hasContent ? 'Ask anything about your papers…' : 'Upload papers to start asking questions…'}
+                placeholder={hasContent ? (mentionPapers.length > 0 ? `Ask about ${mentionPapers.map(p => p.replace('.pdf','')).join(', ')}…` : 'Ask anything about your papers…') : 'Upload papers to start asking questions…'}
                 disabled={streaming || !hasContent}
                 rows={1}
                 style={{
@@ -267,11 +467,28 @@ export default function ChatPage({ status }: Props) {
             </div>
 
             <div className="px-4 pb-2.5 flex items-center justify-between">
-              <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                ↵ Send · Shift+↵ New line
-              </p>
-              <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
-                Grounded in your papers only
+              <div className="flex items-center gap-2">
+                {pdfList.length > 0 && (
+                  <button
+                    onClick={() => setPickerOpen(o => !o)}
+                    title="Scope query to one paper"
+                    className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md transition-colors"
+                    style={{
+                      color: mentionPapers.length > 0 ? '#a5b4fc' : 'rgba(255,255,255,0.25)',
+                      background: mentionPapers.length > 0 ? 'rgba(99,102,241,0.1)' : 'transparent',
+                      border: mentionPapers.length > 0 ? '1px solid rgba(99,102,241,0.2)' : '1px solid transparent',
+                    }}
+                  >
+                    <AtSign size={10} />
+                    <span>{mentionPapers.length > 0 ? `${mentionPapers.length} paper${mentionPapers.length > 1 ? 's' : ''}` : 'Scope'}</span>
+                  </button>
+                )}
+                <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.15)' }}>
+                  ↵ Send · Shift+↵ New line
+                </p>
+              </div>
+              <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.15)' }}>
+                {mentionPapers.length > 0 ? `Querying ${mentionPapers.length} paper${mentionPapers.length > 1 ? 's' : ''}` : 'All papers'}
               </p>
             </div>
           </motion.div>
@@ -282,24 +499,43 @@ export default function ChatPage({ status }: Props) {
 }
 
 /* ── Message Bubble ── */
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({ msg, timestamp }: { msg: ChatMessage; timestamp?: number | null }) {
   const [graphOpen, setGraphOpen] = useState(false)
+  const [showTime, setShowTime] = useState(false)
   const isUser = msg.role === 'user'
 
   if (isUser) {
     return (
-      <div className="flex justify-end">
+      <div className="flex flex-col items-end gap-1">
         <div
+          onDoubleClick={timestamp ? () => setShowTime(t => !t) : undefined}
           className="max-w-[78%] rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed text-white"
           style={{
             background: 'linear-gradient(135deg, rgba(79,70,229,0.8), rgba(124,58,237,0.8))',
             backdropFilter: 'blur(10px)',
             border: '1px solid rgba(99,102,241,0.3)',
             boxShadow: '0 4px 20px rgba(79,70,229,0.2)',
+            cursor: timestamp ? 'default' : undefined,
           }}
         >
           {msg.content}
         </div>
+        <AnimatePresence>
+          {showTime && timestamp && (
+            <motion.p
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.15 }}
+              className="text-[10px] px-2 select-none"
+              style={{ color: 'rgba(255,255,255,0.2)' }}
+            >
+              {new Date(timestamp).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+              {' · '}
+              {new Date(timestamp).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+            </motion.p>
+          )}
+        </AnimatePresence>
       </div>
     )
   }
@@ -307,12 +543,12 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   return (
     <div className="flex gap-3">
       {/* Avatar */}
-      <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 mt-0.5"
+      <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
         style={{
           background: 'linear-gradient(135deg,#4f46e5,#7c3aed)',
           boxShadow: '0 0 14px rgba(99,102,241,0.35)',
         }}
-      >AI</div>
+      ><Bot size={13} className="text-white" /></div>
 
       <div className="flex-1 min-w-0">
         {/* Content card */}
@@ -323,11 +559,16 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             border: '1px solid rgba(255,255,255,0.07)',
           }}
         >
-          {msg.content
-            ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-            : null
-          }
-          {msg.streaming && <span className="cursor" />}
+          {msg.streaming && !msg.content ? (
+            <div className="thinking-dots">
+              <span /><span /><span />
+            </div>
+          ) : msg.content ? (
+            <>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+              {msg.streaming && <span className="cursor" />}
+            </>
+          ) : null}
         </div>
 
         {/* Sources */}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import LandingPage from './pages/LandingPage'
@@ -7,11 +7,27 @@ import AppBackground from './components/AppBackground'
 import ChatPage from './pages/ChatPage'
 import LibraryPage from './pages/LibraryPage'
 import GraphPage from './pages/GraphPage'
-import ComparePage from './pages/ComparePage'
+import InsightsPage from './pages/InsightsPage'
 import { fetchStatus, type Status } from './api'
 import { useMouseParallax } from './hooks/use3D'
+import type { ChatMessage } from './api'
 
-export type Page = 'chat' | 'library' | 'graph' | 'compare'
+export type Page = 'chat' | 'library' | 'graph' | 'insights'
+
+export interface SavedChat {
+  id: string
+  title: string
+  messages: ChatMessage[]
+  timestamp: number
+}
+
+function loadHistory(): SavedChat[] {
+  try { return JSON.parse(localStorage.getItem('papergraph_chats') || '[]') }
+  catch { return [] }
+}
+function saveHistoryToStorage(chats: SavedChat[]) {
+  localStorage.setItem('papergraph_chats', JSON.stringify(chats.slice(0, 10)))
+}
 
 const pageVariants = {
   initial: { opacity: 0, y: 16, scale: 0.99 },
@@ -22,10 +38,56 @@ const pageVariants = {
 function MainApp() {
   const [page,   setPage]   = useState<Page>('chat')
   const [status, setStatus] = useState<Status>({ chunks: 0, graph_nodes: 0, graph_edges: 0, files: 0 })
+  const [chatHistory, setChatHistory] = useState<SavedChat[]>(loadHistory)
+  const [activeChatId, setActiveChatId] = useState<string | null>(null)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const mouse = useMouseParallax(0.008)
 
   const refreshStatus = () => { fetchStatus().then(setStatus).catch(() => {}) }
   useEffect(() => { refreshStatus() }, [])
+
+  const saveChat = useCallback((messages: ChatMessage[]) => {
+    if (messages.length === 0) return
+    const firstQ = messages.find(m => m.role === 'user')?.content || 'Untitled'
+    const title = firstQ.length > 40 ? firstQ.slice(0, 40) + '…' : firstQ
+    const id = activeChatId || Date.now().toString()
+    if (!activeChatId) setActiveChatId(id)
+    setChatHistory(prev => {
+      const existing = prev.find(c => c.id === id)
+      const updated = [
+        { id, title, messages: [...messages], timestamp: existing?.timestamp ?? Date.now() },
+        ...prev.filter(c => c.id !== id),
+      ]
+        .sort((a, b) => b.timestamp - a.timestamp)  // newest first, stable order
+        .slice(0, 10)
+      saveHistoryToStorage(updated)
+      return updated
+    })
+  }, [activeChatId])
+
+  const loadChat = useCallback((chat: SavedChat) => {
+    setActiveChatId(chat.id)
+    setChatMessages(chat.messages)
+    setPage('chat')
+  }, [])
+
+  const deleteChat = useCallback((id: string) => {
+    setChatHistory(prev => {
+      const updated = prev.filter(c => c.id !== id)
+      saveHistoryToStorage(updated)
+      return updated
+    })
+    if (activeChatId === id) {
+      setActiveChatId(null)
+      setChatMessages([])
+    }
+  }, [activeChatId])
+
+  const newChat = useCallback(() => {
+    setActiveChatId(null)
+    setChatMessages([])
+    setPage('chat')
+  }, [])
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#060608' }}>
@@ -48,7 +110,8 @@ function MainApp() {
 
       {/* App chrome — all above the background layers */}
       <div className="relative flex w-full h-full" style={{ zIndex: 1 }}>
-        <Sidebar page={page} setPage={setPage} status={status} onUploadDone={refreshStatus} />
+        <Sidebar page={page} setPage={setPage} status={status} onUploadDone={refreshStatus}
+          chatHistory={chatHistory} onLoadChat={loadChat} onDeleteChat={deleteChat} onNewChat={newChat} />
 
         <main
           className="flex-1 overflow-hidden flex flex-col min-w-0 relative"
@@ -77,10 +140,12 @@ function MainApp() {
                 exit="exit"
                 className="flex-1 overflow-hidden flex flex-col"
               >
-                {page === 'chat'    && <ChatPage    status={status} onRefresh={refreshStatus} />}
+                {page === 'chat'    && <ChatPage    status={status} onRefresh={refreshStatus}
+                  messages={chatMessages} setMessages={setChatMessages} onSaveChat={saveChat} onNewChat={newChat}
+                  chatTimestamp={activeChatId ? chatHistory.find(c => c.id === activeChatId)?.timestamp ?? null : null} />}
                 {page === 'library' && <LibraryPage onRefresh={refreshStatus} />}
                 {page === 'graph'   && <GraphPage   />}
-                {page === 'compare' && <ComparePage />}
+                {page === 'insights' && <InsightsPage status={status} />}
               </motion.div>
             </AnimatePresence>
           </div>
