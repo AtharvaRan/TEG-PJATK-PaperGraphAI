@@ -231,5 +231,5 @@ MIT — see [LICENSE](LICENSE).
 ---
 
 <p align="center">
-  Built with ❤️ for the TEG PJATK thesis project
+  Built with ❤️ for the TEG PJATK project
 </p>
